@@ -81,8 +81,8 @@ def generate_task_tracker(year: int, filename: str):
 
     # ===== Weekly Report =====
     weekly = workbook.add_worksheet("Weekly Report")
-    headers = ["Week No", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
-    weekly.write_row(0, 0, headers, header_format)
+    weekly_headers = ["Week No", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
+    weekly.write_row(0, 0, weekly_headers, header_format)
     weekly.set_column(0, 7, 15)
     weekly.write_comment(0, 6, f"Weekly goal: linked from Goals sheet")
 
@@ -140,8 +140,9 @@ def generate_task_tracker(year: int, filename: str):
     weekly.conditional_format('H2:H53', {'type': 'cell', 'criteria': '<', 'value': 1, 'format': pend_fmt})
 
     # ===== Monthly Report =====
+    monthly_headers = ["Month Name", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
     monthly = workbook.add_worksheet("Monthly Report")
-    monthly.write_row(0, 0, headers, header_format)
+    monthly.write_row(0, 0, monthly_headers, header_format)
     monthly.set_column(0, 7, 15)
     monthly.write_comment(0, 6, f"Monthly goal: linked from Goals sheet")
 
@@ -162,8 +163,9 @@ def generate_task_tracker(year: int, filename: str):
     monthly.conditional_format('H2:H13', {'type': 'cell', 'criteria': '<', 'value': 1, 'format': pend_fmt})
 
     # ===== Yearly Report =====
+    yearly_headers = ["Year", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
     yearly = workbook.add_worksheet("Yearly Report")
-    yearly.write_row(0, 0, headers, header_format)
+    yearly.write_row(0, 0, yearly_headers, header_format)
     yearly.set_column(0, 7, 15)
 
     # Calculate full year total
