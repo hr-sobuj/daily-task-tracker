@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+xlsxwriter
+jinja2
+python-multipart
