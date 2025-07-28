@@ -7,7 +7,7 @@ def generate_task_tracker(year: int, filename: str):
     WEEKLY_GOAL = 20
     MONTHLY_GOAL = 80
     YEARLY_GOAL = 1000
-    DAILY_GOAL = WEEKLY_GOAL / 7
+    DAILY_GOAL = int(WEEKLY_GOAL / 7)  # tasks per day
 
     workbook = xlsxwriter.Workbook(filename)
 
@@ -25,6 +25,8 @@ def generate_task_tracker(year: int, filename: str):
     medium_fmt = workbook.add_format({'bg_color': '#FFF9C4'})
     low_fmt    = workbook.add_format({'bg_color': '#C8E6C9'})
     time_format = workbook.add_format({'num_format': '0.00', 'border': 1, 'align': 'center'})
+    percent_format = workbook.add_format({'num_format': '0.0%', 'border': 1, 'align': 'center'})
+    cell_format = workbook.add_format({'border': 1, 'align': 'center'})
 
     # ===== Goals Sheet =====
     goals = workbook.add_worksheet("Goals")
@@ -57,7 +59,8 @@ def generate_task_tracker(year: int, filename: str):
             current = date(year, month, day)
             sheet.write_datetime(day, 0, current, date_format)
             sheet.write(day, 1, current.strftime('%A'), centered_format)
-            sheet.write_number(day, 2, DAILY_GOAL, centered_format)
+            # এখানে এখন formula use করলাম যা Goals শীট থেকে daily goal নিবে
+            sheet.write_formula(day, 2, '=Goals!B2', centered_format)
             for col in range(3, len(task_headers)):
                 if col == 6:
                     sheet.write(day, col, None, time_format)
@@ -81,10 +84,7 @@ def generate_task_tracker(year: int, filename: str):
     headers = ["Week No", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
     weekly.write_row(0, 0, headers, header_format)
     weekly.set_column(0, 7, 15)
-    weekly.write_comment(0, 6, f"Weekly goal: {WEEKLY_GOAL} tasks (from your settings)")
-
-    percent_format = workbook.add_format({'num_format': '0.0%', 'border': 1, 'align': 'center'})
-    cell_format = workbook.add_format({'border': 1, 'align': 'center'})
+    weekly.write_comment(0, 6, f"Weekly goal: linked from Goals sheet")
 
     for w in range(1, 53):
         weekly.write_number(w, 0, w)
@@ -132,7 +132,8 @@ def generate_task_tracker(year: int, filename: str):
         weekly.write_formula(w, 3, "=" + "+".join(pend_parts), cell_format)
         weekly.write_formula(w, 4, "=" + "+".join(skip_parts), cell_format)
         weekly.write_formula(w, 5, "=" + "+".join(hr_parts), time_format)
-        weekly.write_number(w, 6, WEEKLY_GOAL, cell_format)
+        # Dynamic link to Goals sheet for Weekly Goal
+        weekly.write_formula(w, 6, '=Goals!B3', cell_format)
         weekly.write_formula(w, 7, f'=C{w+1}/G{w+1}', percent_format)
 
     weekly.conditional_format('H2:H53', {'type': 'cell', 'criteria': '>=', 'value': 1, 'format': done_fmt})
@@ -142,7 +143,7 @@ def generate_task_tracker(year: int, filename: str):
     monthly = workbook.add_worksheet("Monthly Report")
     monthly.write_row(0, 0, headers, header_format)
     monthly.set_column(0, 7, 15)
-    monthly.write_comment(0, 6, f"Monthly goal: {MONTHLY_GOAL} tasks (from your settings)")
+    monthly.write_comment(0, 6, f"Monthly goal: linked from Goals sheet")
 
     for m in range(1, 13):
         name = calendar.month_name[m]
@@ -153,7 +154,8 @@ def generate_task_tracker(year: int, filename: str):
         monthly.write_formula(m, 3, f"=COUNTIFS('{name}'!$D$2:$D${last+1},\"<>\",'{name}'!$F$2:$F${last+1},\"Pending\")", cell_format)
         monthly.write_formula(m, 4, f"=COUNTIFS('{name}'!$D$2:$D${last+1},\"<>\",'{name}'!$F$2:$F${last+1},\"Skipped\")", cell_format)
         monthly.write_formula(m, 5, f"=SUM('{name}'!$G$2:$G${last+1})", time_format)
-        monthly.write_number(m, 6, MONTHLY_GOAL, cell_format)
+        # Dynamic link to Goals sheet for Monthly Goal
+        monthly.write_formula(m, 6, '=Goals!B4', cell_format)
         monthly.write_formula(m, 7, f'=C{m+1}/G{m+1}', percent_format)
 
     monthly.conditional_format('H2:H13', {'type': 'cell', 'criteria': '>=', 'value': 1, 'format': done_fmt})
@@ -163,18 +165,35 @@ def generate_task_tracker(year: int, filename: str):
     yearly = workbook.add_worksheet("Yearly Report")
     yearly.write_row(0, 0, headers, header_format)
     yearly.set_column(0, 7, 15)
-    yearly.write_comment(0, 6, f"Yearly goal: {YEARLY_GOAL} tasks (from your settings)")
-    yearly.write_number(1, 0, year, cell_format)
-    yearly.write_formula(1, 1, "=SUM('Monthly Report'!B2:B13)", cell_format)
-    yearly.write_formula(1, 2, "=SUM('Monthly Report'!C2:C13)", cell_format)
-    yearly.write_formula(1, 3, "=SUM('Monthly Report'!D2:D13)", cell_format)
-    yearly.write_formula(1, 4, "=SUM('Monthly Report'!E2:E13)", cell_format)
-    yearly.write_formula(1, 5, "=SUM('Monthly Report'!F2:F13)", time_format)
-    yearly.write_number(1, 6, YEARLY_GOAL, cell_format)
+
+    # Calculate full year total
+    total_parts, done_parts, pend_parts, skip_parts, hr_parts = [], [], [], [], []
+
+    for m in range(1, 13):
+        mn = calendar.month_name[m]
+        last = calendar.monthrange(year, m)[1]
+        date_rng   = f"'{mn}'!$A$2:$A${last+1}"
+        desc_rng   = f"'{mn}'!$D$2:$D${last+1}"
+        status_rng = f"'{mn}'!$F$2:$F${last+1}"
+        hours_rng  = f"'{mn}'!$G$2:$G${last+1}"
+
+        total_parts.append(f"COUNTIF('{mn}'!$D$2:$D${last+1},\"<>\")")
+        done_parts.append(f"COUNTIFS('{mn}'!$D$2:$D${last+1},\"<>\",'{mn}'!$F$2:$F${last+1},\"Done\")")
+        pend_parts.append(f"COUNTIFS('{mn}'!$D$2:$D${last+1},\"<>\",'{mn}'!$F$2:$F${last+1},\"Pending\")")
+        skip_parts.append(f"COUNTIFS('{mn}'!$D$2:$D${last+1},\"<>\",'{mn}'!$F$2:$F${last+1},\"Skipped\")")
+        hr_parts.append(f"SUM('{mn}'!$G$2:$G${last+1})")
+
+    yearly.write_number(1, 0, year)
+    yearly.write_formula(1, 1, "=" + "+".join(total_parts), cell_format)
+    yearly.write_formula(1, 2, "=" + "+".join(done_parts), cell_format)
+    yearly.write_formula(1, 3, "=" + "+".join(pend_parts), cell_format)
+    yearly.write_formula(1, 4, "=" + "+".join(skip_parts), cell_format)
+    yearly.write_formula(1, 5, "=" + "+".join(hr_parts), time_format)
+    # Dynamic link to Goals sheet for Yearly Goal
+    yearly.write_formula(1, 6, '=Goals!B5', cell_format)
     yearly.write_formula(1, 7, '=C2/G2', percent_format)
 
     yearly.conditional_format('H2:H2', {'type': 'cell', 'criteria': '>=', 'value': 1, 'format': done_fmt})
     yearly.conditional_format('H2:H2', {'type': 'cell', 'criteria': '<', 'value': 1, 'format': pend_fmt})
 
-    # ===== Save Workbook =====
     workbook.close()
