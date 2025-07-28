@@ -1,0 +1,250 @@
+import xlsxwriter
+import calendar
+from datetime import date, timedelta
+
+# ===== User-defined Goals =====
+WEEKLY_GOAL = 20
+MONTHLY_GOAL = 80
+YEARLY_GOAL = 1000
+DAILY_GOAL = WEEKLY_GOAL / 7  # tasks per day
+
+# ===== Create Workbook =====
+filename = "Advanced_Task_Tracker_Updated.xlsx"
+workbook = xlsxwriter.Workbook(filename)
+
+# ===== Formats =====
+header_format = workbook.add_format({
+    'bold': True,
+    'font_color': 'white',
+    'bg_color': '#0B5394',
+    'align': 'center',
+    'valign': 'vcenter',
+    'border': 1
+})
+date_format     = workbook.add_format({'num_format': 'dd-mm-yyyy', 'border': 1, 'align': 'center'})
+centered_format = workbook.add_format({'border': 1, 'align': 'center'})
+
+# Status formats
+done_fmt = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
+pend_fmt = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C6500'})
+skip_fmt = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
+
+# Priority formats
+high_fmt   = workbook.add_format({'bg_color': '#FFCDD2'})
+medium_fmt = workbook.add_format({'bg_color': '#FFF9C4'})
+low_fmt    = workbook.add_format({'bg_color': '#C8E6C9'})
+
+# Time format for hours
+time_format = workbook.add_format({
+    'num_format': '0.00',  # Show decimal hours
+    'border': 1,
+    'align': 'center'
+})
+
+# ===== Goals Sheet =====
+goals = workbook.add_worksheet("Goals")
+goals.write_row(0, 0, ["Goal (Tasks)", "Value"], header_format)
+goals.write(1, 0, "Daily");   goals.write_number(1, 1, DAILY_GOAL)
+goals.write(2, 0, "Weekly");  goals.write_number(2, 1, WEEKLY_GOAL)
+goals.write(3, 0, "Monthly"); goals.write_number(3, 1, MONTHLY_GOAL)
+goals.write(4, 0, "Yearly");  goals.write_number(4, 1, YEARLY_GOAL)
+goals.write(5, 0, "Unit");    goals.write(5, 1, "Tasks")
+goals.set_column(0, 0, 20)
+goals.set_column(1, 1, 12)
+
+# ===== Monthly Sheets =====
+task_headers = [
+    "Date", "Day", "Daily Goal", "Task Description", "Priority", "Status",
+    "Hours Spent", "What Went Well", "What I Missed", "Notes"
+]
+col_widths = [15, 15, 12, 30, 12, 15, 12, 25, 25, 30]
+priority_list = ['High', 'Medium', 'Low']
+status_list   = ['Pending', 'Done', 'Skipped']
+
+for month in range(1, 13):
+    name = calendar.month_name[month]
+    sheet = workbook.add_worksheet(name)
+    days = calendar.monthrange(2025, month)[1]
+    sheet.write_row(0, 0, task_headers, header_format)
+    for col, width in enumerate(col_widths):
+        sheet.set_column(col, col, width)
+    for day in range(1, days + 1):
+        current = date(2025, month, day)
+        sheet.write_datetime(day, 0, current, date_format)
+        sheet.write(day, 1, current.strftime('%A'), centered_format)
+        sheet.write_number(day, 2, DAILY_GOAL, centered_format)
+        for col in range(3, len(task_headers)):
+            if col == 6:  # Hours Spent column
+                sheet.write(day, col, None, time_format)
+            else:
+                sheet.write(day, col, None, centered_format)
+
+    # Data validation
+    sheet.data_validation(f'E2:E{days+1}', {'validate': 'list', 'source': priority_list})
+    sheet.data_validation(f'F2:F{days+1}', {'validate': 'list', 'source': status_list})
+
+    # Priority colors
+    sheet.conditional_format(f'E2:E{days+1}', {
+        'type': 'text', 'criteria': 'containing', 'value': 'High', 'format': high_fmt})
+    sheet.conditional_format(f'E2:E{days+1}', {
+        'type': 'text', 'criteria': 'containing', 'value': 'Medium', 'format': medium_fmt})
+    sheet.conditional_format(f'E2:E{days+1}', {
+        'type': 'text', 'criteria': 'containing', 'value': 'Low', 'format': low_fmt})
+
+    # Status colors
+    sheet.conditional_format(f'F2:F{days+1}', {
+        'type': 'text', 'criteria': 'containing', 'value': 'Done', 'format': done_fmt})
+    sheet.conditional_format(f'F2:F{days+1}', {
+        'type': 'text', 'criteria': 'containing', 'value': 'Pending', 'format': pend_fmt})
+    sheet.conditional_format(f'F2:F{days+1}', {
+        'type': 'text', 'criteria': 'containing', 'value': 'Skipped', 'format': skip_fmt})
+
+# ===== Weekly Report =====
+weekly = workbook.add_worksheet("Weekly Report")
+headers = ["Week No", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
+weekly.write_row(0, 0, headers, header_format)
+weekly.set_column(0, 7, 15)
+weekly.write_comment(0, 6, f"Weekly goal: {WEEKLY_GOAL} tasks (from your settings)")
+
+# Add formats
+time_format = workbook.add_format({
+    'num_format': '0.00',  # Show decimal hours
+    'border': 1,
+    'align': 'center'
+})
+percent_format = workbook.add_format({
+    'num_format': '0.0%',
+    'border': 1,
+    'align': 'center'
+})
+cell_format = workbook.add_format({
+    'border': 1,
+    'align': 'center'
+})
+
+for w in range(1, 53):
+    weekly.write_number(w, 0, w)
+    start = date(2025, 1, 1) + timedelta(days=(w - 1) * 7)
+    end   = start + timedelta(days=6)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str   = end.strftime("%Y-%m-%d")
+
+    total_parts, done_parts, pend_parts, skip_parts, hr_parts = [], [], [], [], []
+
+    for m in range(1, 13):
+        mn = calendar.month_name[m]
+        last = calendar.monthrange(2025, m)[1]
+        date_rng   = f"'{mn}'!$A$2:$A${last}"
+        desc_rng   = f"'{mn}'!$D$2:$D${last}"
+        status_rng = f"'{mn}'!$F$2:$F${last}"
+        hours_rng  = f"'{mn}'!$G$2:$G${last}"
+
+        total_parts.append(
+            f"SUMPRODUCT((--({date_rng}>=DATEVALUE(\"{start_str}\")))*"
+            f"(--({date_rng}<=DATEVALUE(\"{end_str}\")))*(LEN({desc_rng})>0))"
+        )
+        done_parts.append(
+            f"SUMPRODUCT((--({date_rng}>=DATEVALUE(\"{start_str}\")))*"
+            f"(--({date_rng}<=DATEVALUE(\"{end_str}\")))*(LEN({desc_rng})>0)*"
+            f"({status_rng}=\"Done\"))"
+        )
+        pend_parts.append(
+            f"SUMPRODUCT((--({date_rng}>=DATEVALUE(\"{start_str}\")))*"
+            f"(--({date_rng}<=DATEVALUE(\"{end_str}\")))*(LEN({desc_rng})>0)*"
+            f"({status_rng}=\"Pending\"))"
+        )
+        skip_parts.append(
+            f"SUMPRODUCT((--({date_rng}>=DATEVALUE(\"{start_str}\")))*"
+            f"(--({date_rng}<=DATEVALUE(\"{end_str}\")))*(LEN({desc_rng})>0)*"
+            f"({status_rng}=\"Skipped\"))"
+        )
+        hr_parts.append(
+            f"SUMPRODUCT((--({date_rng}>=DATEVALUE(\"{start_str}\")))*"
+            f"(--({date_rng}<=DATEVALUE(\"{end_str}\")))*(--({hours_rng}))*1)"
+        )
+
+    weekly.write_formula(w, 1, "=" + "+".join(total_parts), cell_format)
+    weekly.write_formula(w, 2, "=" + "+".join(done_parts), cell_format)
+    weekly.write_formula(w, 3, "=" + "+".join(pend_parts), cell_format)
+    weekly.write_formula(w, 4, "=" + "+".join(skip_parts), cell_format)
+    weekly.write_formula(w, 5, "=" + "+".join(hr_parts), time_format)
+    weekly.write_number(w, 6, WEEKLY_GOAL, cell_format)
+    weekly.write_formula(w, 7, f'=C{w+1}/G{w+1}', percent_format)
+
+# Add conditional formatting for completion percentage
+weekly.conditional_format('H2:H53', {
+    'type': 'cell',
+    'criteria': '>=',
+    'value': 1,
+    'format': done_fmt
+})
+weekly.conditional_format('H2:H53', {
+    'type': 'cell',
+    'criteria': '<',
+    'value': 1,
+    'format': pend_fmt
+})
+
+# ===== Monthly Report =====
+monthly = workbook.add_worksheet("Monthly Report")
+headers = ["Month", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
+monthly.write_row(0, 0, headers, header_format)
+monthly.set_column(0, 7, 15)
+monthly.write_comment(0, 6, f"Monthly goal: {MONTHLY_GOAL} tasks (from your settings)")
+
+for m in range(1, 13):
+    name = calendar.month_name[m]
+    last = calendar.monthrange(2025, m)[1]
+    monthly.write(m, 0, name, cell_format)
+    monthly.write_formula(m, 1, f"=COUNTIF('{name}'!$D$2:$D${last+1},\"<>\")", cell_format)
+    monthly.write_formula(m, 2, f"=COUNTIFS('{name}'!$D$2:$D${last+1},\"<>\",'{name}'!$F$2:$F${last+1},\"Done\")", cell_format)
+    monthly.write_formula(m, 3, f"=COUNTIFS('{name}'!$D$2:$D${last+1},\"<>\",'{name}'!$F$2:$F${last+1},\"Pending\")", cell_format)
+    monthly.write_formula(m, 4, f"=COUNTIFS('{name}'!$D$2:$D${last+1},\"<>\",'{name}'!$F$2:$F${last+1},\"Skipped\")", cell_format)
+    monthly.write_formula(m, 5, f"=SUM('{name}'!$G$2:$G${last+1})", time_format)
+    monthly.write_number(m, 6, MONTHLY_GOAL, cell_format)
+    monthly.write_formula(m, 7, f'=C{m+1}/G{m+1}', percent_format)
+
+monthly.conditional_format('H2:H13', {
+    'type': 'cell',
+    'criteria': '>=',
+    'value': 1,
+    'format': done_fmt
+})
+monthly.conditional_format('H2:H13', {
+    'type': 'cell',
+    'criteria': '<',
+    'value': 1,
+    'format': pend_fmt
+})
+
+# ===== Yearly Report =====
+yearly = workbook.add_worksheet("Yearly Report")
+headers = ["Year", "Total Tasks", "Done", "Pending", "Skipped", "Total Hours", "Goal", "% Complete"]
+yearly.write_row(0, 0, headers, header_format)
+yearly.set_column(0, 7, 15)
+yearly.write_comment(0, 6, f"Yearly goal: {YEARLY_GOAL} tasks (from your settings)")
+yearly.write_number(1, 0, 2025, cell_format)
+yearly.write_formula(1, 1, "=SUM('Monthly Report'!B2:B13)", cell_format)
+yearly.write_formula(1, 2, "=SUM('Monthly Report'!C2:C13)", cell_format)
+yearly.write_formula(1, 3, "=SUM('Monthly Report'!D2:D13)", cell_format)
+yearly.write_formula(1, 4, "=SUM('Monthly Report'!E2:E13)", cell_format)
+yearly.write_formula(1, 5, "=SUM('Monthly Report'!F2:F13)", time_format)
+yearly.write_number(1, 6, YEARLY_GOAL, cell_format)
+yearly.write_formula(1, 7, '=C2/G2', percent_format)
+
+yearly.conditional_format('H2:H2', {
+    'type': 'cell',
+    'criteria': '>=',
+    'value': 1,
+    'format': done_fmt
+})
+yearly.conditional_format('H2:H2', {
+    'type': 'cell',
+    'criteria': '<',
+    'value': 1,
+    'format': pend_fmt
+})
+
+# ===== Close Workbook =====
+workbook.close()
+print(f"✅ Excel file '{filename}' created successfully!")
